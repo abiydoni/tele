@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Telegram Gateway Dashboard</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>🤖 Telegram Gateway Dashboard</h1>
+        <div class="stats-bar" id="statsBar">
+          <div class="stat-item">
+            <span class="stat-label">Total Tokens:</span>
+            <span class="stat-value" id="totalTokens">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Aktif:</span>
+            <span class="stat-value" id="activeTokens">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Total Logs:</span>
+            <span class="stat-value" id="totalLogs">0</span>
+          </div>
+        </div>
+      </header>
+
+      <nav class="tabs">
+        <button class="tab-btn active" onclick="showTab('tokens')">
+          Bot Tokens
+        </button>
+        <button class="tab-btn" onclick="showTab('settings')">Settings</button>
+        <button class="tab-btn" onclick="showTab('logs')">Message Logs</button>
+      </nav>
+
+      <!-- Tokens Tab -->
+      <div id="tokensTab" class="tab-content active">
+        <div class="section-header">
+          <h2>Bot Tokens</h2>
+          <button class="btn btn-primary" onclick="showTokenModal()">
+            + Tambah Token
+          </button>
+        </div>
+        <div class="table-container">
+          <table id="tokensTable">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nama</th>
+                <th>Token</th>
+                <th>Deskripsi</th>
+                <th>Status</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="tokensTableBody">
+              <tr>
+                <td colspan="6" class="loading">Memuat data...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Settings Tab -->
+      <div id="settingsTab" class="tab-content">
+        <div class="section-header">
+          <h2>Settings</h2>
+          <button class="btn btn-primary" onclick="showSettingModal()">
+            + Tambah Setting
+          </button>
+        </div>
+        <div class="table-container">
+          <table id="settingsTable">
+            <thead>
+              <tr>
+                <th>Key</th>
+                <th>Value</th>
+                <th>Deskripsi</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="settingsTableBody">
+              <tr>
+                <td colspan="4" class="loading">Memuat data...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Logs Tab -->
+      <div id="logsTab" class="tab-content">
+        <div class="section-header">
+          <h2>Message Logs</h2>
+          <button class="btn btn-secondary" onclick="loadLogs()">
+            Refresh
+          </button>
+        </div>
+        <div class="table-container">
+          <table id="logsTable">
+            <thead>
+              <tr>
+                <th>Waktu</th>
+                <th>Chat ID</th>
+                <th>Username</th>
+                <th>Tipe</th>
+                <th>Pesan</th>
+                <th>Arah</th>
+              </tr>
+            </thead>
+            <tbody id="logsTableBody">
+              <tr>
+                <td colspan="6" class="loading">Memuat data...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Token Modal -->
+    <div id="tokenModal" class="modal">
+      <div class="modal-content">
+        <span class="close" onclick="closeTokenModal()">&times;</span>
+        <h2 id="tokenModalTitle">Tambah Bot Token</h2>
+        <form id="tokenForm" onsubmit="saveToken(event)">
+          <input type="hidden" id="tokenId" />
+          <div class="form-group">
+            <label for="tokenName">Nama Token *</label>
+            <input type="text" id="tokenName" required />
+          </div>
+          <div class="form-group">
+            <label for="tokenValue">Token *</label>
+            <input type="text" id="tokenValue" required />
+          </div>
+          <div class="form-group">
+            <label for="tokenDescription">Deskripsi</label>
+            <textarea id="tokenDescription" rows="3"></textarea>
+          </div>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="tokenIsActive" checked />
+              Aktif
+            </label>
+          </div>
+          <div class="form-actions">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              onclick="closeTokenModal()"
+            >
+              Batal
+            </button>
+            <button type="submit" class="btn btn-primary">Simpan</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Setting Modal -->
+    <div id="settingModal" class="modal">
+      <div class="modal-content">
+        <span class="close" onclick="closeSettingModal()">&times;</span>
+        <h2 id="settingModalTitle">Tambah Setting</h2>
+        <form id="settingForm" onsubmit="saveSetting(event)">
+          <input type="hidden" id="settingKey" />
+          <div class="form-group">
+            <label for="settingKeyInput">Key *</label>
+            <input type="text" id="settingKeyInput" required />
+          </div>
+          <div class="form-group">
+            <label for="settingValue">Value *</label>
+            <input type="text" id="settingValue" required />
+          </div>
+          <div class="form-group">
+            <label for="settingDescription">Deskripsi</label>
+            <textarea id="settingDescription" rows="3"></textarea>
+          </div>
+          <div class="form-actions">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              onclick="closeSettingModal()"
+            >
+              Batal
+            </button>
+            <button type="submit" class="btn btn-primary">Simpan</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="/script.js"></script>
+  </body>
+</html>
