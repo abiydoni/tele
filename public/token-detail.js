@@ -95,8 +95,19 @@ async function loadBotInfo() {
   } catch (error) {
     console.error("Error loading bot info:", error);
     document.getElementById("botInfo").innerHTML = `
-      <div style="color: #dc3545;">Error: ${error.message}</div>
-      <p>Pastikan bot sudah dijalankan dengan: <code>npm run gateway</code></p>
+      <div style="color: #dc3545; padding: 15px; background: #f8d7da; border-radius: 6px; margin-bottom: 10px;">
+        <strong>⚠️ Bot Offline</strong><br>
+        <small>Error: ${error.message}</small>
+      </div>
+      <div style="padding: 15px; background: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107;">
+        <strong>💡 Cara menjalankan Gateway Bot:</strong>
+        <ol style="margin: 10px 0; padding-left: 25px; line-height: 1.8;">
+          <li>Buka terminal baru</li>
+          <li>Jalankan: <code style="background: #f4f4f4; padding: 4px 8px; border-radius: 4px;">npm run gateway</code></li>
+          <li>Pastikan token bot aktif di dashboard</li>
+          <li>Refresh halaman ini setelah gateway berjalan</li>
+        </ol>
+      </div>
     `;
   }
 }
@@ -166,17 +177,51 @@ async function refreshChats() {
 // Load connected chats
 async function loadChats() {
   try {
+    console.log(`[Frontend] Loading chats for token ID: ${tokenId}`);
     const response = await fetch(`/api/tokens/${tokenId}/chats`);
     if (!response.ok) {
-      throw new Error("Gagal memuat daftar chat");
+      const errorData = await response
+        .json()
+        .catch(() => ({ error: "Unknown error" }));
+      throw new Error(errorData.error || "Gagal memuat daftar chat");
     }
     const chats = await response.json();
+    console.log(`[Frontend] Received ${chats.length} chats:`, chats);
 
     if (chats.length === 0) {
       document.getElementById("groupsList").innerHTML = `
-        <div style="padding: 40px; text-align: center; color: #999; grid-column: 1 / -1;">
-          <p style="font-size: 1.1em; margin-bottom: 10px;">Belum ada group/chat yang terhubung</p>
-          <p style="font-size: 0.9em;">Kirim pesan ke bot untuk menambahkan chat ke daftar</p>
+        <div style="padding: 40px; text-align: center; color: #666; background: #f8f9fa; border-radius: 8px; border: 2px dashed #dee2e6;">
+          <div style="font-size: 3em; margin-bottom: 15px;">💬</div>
+          <p style="font-size: 1.2em; margin-bottom: 15px; font-weight: 600; color: #333;">Belum ada group/chat yang terhubung</p>
+          <div style="text-align: left; max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <p style="font-size: 1em; margin-bottom: 15px; color: #333;"><strong>📋 Langkah-langkah untuk menampilkan chat:</strong></p>
+            <ol style="text-align: left; padding-left: 25px; line-height: 1.8;">
+              <li style="margin-bottom: 10px;">
+                <strong>Pastikan Gateway Bot berjalan:</strong><br>
+                <code style="background: #f4f4f4; padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 5px;">npm run gateway</code>
+                <br><small style="color: #666;">Jalankan di terminal terpisah</small>
+              </li>
+              <li style="margin-bottom: 10px;">
+                <strong>Untuk Personal Chat:</strong><br>
+                Buka Telegram, cari bot Anda, lalu kirim pesan <code>/start</code> ke bot
+              </li>
+              <li style="margin-bottom: 10px;">
+                <strong>Untuk Group:</strong><br>
+                Tambahkan bot ke group, lalu kirim pesan apapun di group tersebut
+              </li>
+              <li style="margin-bottom: 10px;">
+                <strong>Untuk Channel:</strong><br>
+                Tambahkan bot sebagai admin di channel, lalu kirim pesan di channel
+              </li>
+              <li>
+                <strong>Refresh daftar:</strong><br>
+                Klik tombol <strong>"🔄 Refresh"</strong> di atas setelah mengirim pesan
+              </li>
+            </ol>
+            <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+              <strong>💡 Tips:</strong> Setelah mengirim pesan ke bot, chat akan otomatis muncul di daftar ini dan di Message Logs.
+            </div>
+          </div>
         </div>
       `;
       return;
@@ -223,11 +268,13 @@ async function loadChats() {
       })
       .join("");
 
-    document.getElementById("groupsList").innerHTML = groupsHtml;
+    document.getElementById(
+      "groupsList"
+    ).innerHTML = `<div class="groups-list">${groupsHtml}</div>`;
   } catch (error) {
     console.error("Error loading chats:", error);
     document.getElementById("groupsList").innerHTML = `
-      <div style="color: #dc3545; grid-column: 1 / -1; padding: 20px; text-align: center;">
+      <div style="color: #dc3545; padding: 20px; text-align: center;">
         Error: ${error.message}
       </div>
     `;
@@ -257,29 +304,53 @@ async function sendTestMessage() {
   const message = document.getElementById("testMessage").value.trim();
 
   if (!chatIdInput || !message) {
-    alert("Chat ID dan pesan harus diisi!");
+    alert("Chat ID/Username dan pesan harus diisi!");
     return;
   }
 
   // Validate chat ID format
-  let chatId = chatIdInput;
+  let chatId = chatIdInput.trim();
 
-  // Remove any non-numeric characters except minus sign
-  chatId = chatId.replace(/[^\d-]/g, "");
+  // Check if it's a username (starts with @)
+  const isUsername = chatId.startsWith("@");
 
-  // Check if it's a valid number
-  if (!chatId || (chatId !== "-" && isNaN(parseInt(chatId)))) {
-    document.getElementById("testResult").innerHTML = `
-      <div style="color: #dc3545; padding: 10px; background: #f8d7da; border-radius: 6px;">
-        ❌ Chat ID tidak valid!<br>
-        <small>Chat ID harus berupa angka (contoh: 123456789 untuk personal, -1001234567890 untuk group)</small>
-      </div>
-    `;
-    return;
+  // If not username, validate as numeric chat ID
+  if (!isUsername) {
+    // Check if it looks like a phone number
+    const phonePattern = /^(\+62|62|0)[0-9]{9,12}$/;
+    const cleanPhone = chatId.replace(/[^\d+]/g, "");
+    if (phonePattern.test(cleanPhone)) {
+      document.getElementById("testResult").innerHTML = `
+        <div style="color: #dc3545; padding: 15px; background: #f8d7da; border-radius: 6px;">
+          ❌ <strong>Nomor HP tidak bisa digunakan sebagai Chat ID!</strong><br><br>
+          <strong>Chat ID adalah ID numerik unik dari Telegram, bukan nomor telepon.</strong><br><br>
+          <strong>Cara mendapatkan Chat ID:</strong><br>
+          1. <strong>Personal Chat:</strong> Kirim pesan /start ke bot, lalu cek di Message Logs di atas<br>
+          2. <strong>Group/Channel:</strong> Chat ID akan muncul setelah bot ditambahkan ke group<br>
+          3. Klik group di daftar chat di atas untuk melihat Chat ID-nya<br>
+          4. Atau gunakan username channel/group (format: @username)
+        </div>
+      `;
+      return;
+    }
+
+    // Remove any non-numeric characters except minus sign
+    chatId = chatId.replace(/[^\d-]/g, "");
+
+    // Check if it's a valid number
+    if (!chatId || (chatId !== "-" && isNaN(parseInt(chatId)))) {
+      document.getElementById("testResult").innerHTML = `
+        <div style="color: #dc3545; padding: 10px; background: #f8d7da; border-radius: 6px;">
+          ❌ Chat ID tidak valid!<br>
+          <small>Chat ID harus berupa angka (contoh: 123456789 untuk personal, -1001234567890 untuk group) atau username (contoh: @channelname)</small>
+        </div>
+      `;
+      return;
+    }
+
+    // Convert to number (keep as string for very large numbers)
+    chatId = chatId.includes("-") ? chatId : parseInt(chatId).toString();
   }
-
-  // Convert to number (keep as string for very large numbers)
-  chatId = chatId.includes("-") ? chatId : parseInt(chatId).toString();
 
   const resultDiv = document.getElementById("testResult");
   resultDiv.innerHTML = '<div style="color: #666;">Mengirim pesan...</div>';
@@ -312,12 +383,25 @@ async function sendTestMessage() {
       let errorMsg = result.error || "Gagal mengirim pesan";
 
       // Provide helpful error messages
-      if (errorMsg.includes("chat not found") || errorMsg.includes("chat_id")) {
+      if (errorMsg.includes("Nomor HP tidak bisa digunakan")) {
+        // Already handled above
+      } else if (
+        errorMsg.includes("chat not found") ||
+        errorMsg.includes("chat_id") ||
+        errorMsg.includes("Chat not found")
+      ) {
         errorMsg =
           "Chat tidak ditemukan. Pastikan:\n" +
-          "1. Bot sudah ditambahkan ke group/channel\n" +
+          "1. Bot sudah ditambahkan ke group/channel (jika group/channel)\n" +
           "2. Chat ID benar (bukan nomor telepon)\n" +
-          "3. Untuk personal chat, user sudah mengirim /start ke bot";
+          "3. Untuk personal chat, user sudah mengirim /start ke bot\n" +
+          "4. Jika menggunakan username, pastikan format benar (@username)";
+      } else if (errorMsg.includes("bot was blocked")) {
+        errorMsg =
+          "Bot diblokir oleh user. User harus membuka blokir bot terlebih dahulu.";
+      } else if (errorMsg.includes("not enough rights")) {
+        errorMsg =
+          "Bot tidak memiliki izin yang cukup. Pastikan bot adalah admin di group/channel.";
       }
 
       resultDiv.innerHTML = `
@@ -388,9 +472,26 @@ async function loadMessageLogs() {
 
     if (logs.length === 0) {
       logsList.innerHTML = `
-        <div style="padding: 40px; text-align: center; color: #999;">
-          <p style="font-size: 1.1em; margin-bottom: 10px;">Belum ada message logs</p>
-          <p style="font-size: 0.9em;">Log akan muncul setelah ada pesan masuk atau keluar</p>
+        <div style="padding: 40px; text-align: center; color: #666; background: #f8f9fa; border-radius: 8px; border: 2px dashed #dee2e6;">
+          <div style="font-size: 3em; margin-bottom: 15px;">📝</div>
+          <p style="font-size: 1.2em; margin-bottom: 15px; font-weight: 600; color: #333;">Belum ada message logs</p>
+          <div style="text-align: left; max-width: 500px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <p style="font-size: 1em; margin-bottom: 15px; color: #333;"><strong>Untuk melihat logs:</strong></p>
+            <ul style="text-align: left; padding-left: 25px; line-height: 1.8;">
+              <li style="margin-bottom: 10px;">
+                Pastikan Gateway Bot berjalan: <code style="background: #f4f4f4; padding: 4px 8px; border-radius: 4px;">npm run gateway</code>
+              </li>
+              <li style="margin-bottom: 10px;">
+                Kirim pesan ke bot (personal chat, group, atau channel)
+              </li>
+              <li>
+                Log akan otomatis muncul di sini setelah ada aktivitas
+              </li>
+            </ul>
+            <div style="margin-top: 15px; padding: 10px; background: #e7f3ff; border-radius: 4px; font-size: 0.9em;">
+              <strong>💡 Info:</strong> Setiap pesan yang masuk atau keluar akan tercatat di sini, termasuk Chat ID-nya.
+            </div>
+          </div>
         </div>
       `;
       return;

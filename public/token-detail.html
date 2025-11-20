@@ -72,7 +72,7 @@
       }
       .groups-list {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr;
         gap: 15px;
         margin-top: 15px;
       }
@@ -224,55 +224,63 @@
         </div>
       </div>
 
-      <!-- Groups List (Full Width) -->
-      <div class="info-card" style="margin-top: 20px">
-        <div
-          style="
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-          "
-        >
-          <h3 style="margin: 0">💬 Daftar Group & Chat</h3>
-          <button
-            class="btn btn-secondary"
-            onclick="refreshChats()"
-            id="refreshBtn"
+      <!-- Groups List & Message Logs (Two Column) -->
+      <div class="two-column-layout" style="margin-top: 20px">
+        <!-- Left Column: Groups List -->
+        <div class="info-card">
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 15px;
+            "
           >
-            🔄 Refresh
-          </button>
+            <div>
+              <h3 style="margin: 0">💬 Daftar Group & Chat</h3>
+              <small style="color: #666; font-size: 0.85em">
+                Chat akan muncul setelah bot menerima pesan
+              </small>
+            </div>
+            <button
+              class="btn btn-secondary"
+              onclick="refreshChats()"
+              id="refreshBtn"
+            >
+              🔄 Refresh
+            </button>
+          </div>
+          <div id="groupsList" style="max-height: 600px; overflow-y: auto">
+            <div class="loading">Memuat daftar group...</div>
+          </div>
         </div>
-        <div id="groupsList" class="groups-list">
-          <div class="loading">Memuat daftar group...</div>
+
+        <!-- Right Column: Message Logs -->
+        <div class="info-card">
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 15px;
+            "
+          >
+            <h3 style="margin: 0">📝 Message Logs</h3>
+            <button
+              class="btn btn-secondary"
+              onclick="loadMessageLogs()"
+              id="refreshLogsBtn"
+            >
+              🔄 Refresh
+            </button>
+          </div>
+          <div id="messageLogsList" style="max-height: 600px; overflow-y: auto">
+            <div class="loading">Memuat message logs...</div>
+          </div>
         </div>
       </div>
 
-      <!-- Message Logs -->
-      <div class="info-card" style="margin-top: 20px">
-        <div
-          style="
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-          "
-        >
-          <h3 style="margin: 0">📝 Message Logs</h3>
-          <button
-            class="btn btn-secondary"
-            onclick="loadMessageLogs()"
-            id="refreshLogsBtn"
-          >
-            🔄 Refresh
-          </button>
-        </div>
-        <div id="messageLogsList" style="max-height: 500px; overflow-y: auto">
-          <div class="loading">Memuat message logs...</div>
-        </div>
-      </div>
-
-      <!-- Test Message -->
+      <!-- Test Message (Full Width) -->
       <div class="info-card" style="margin-top: 20px">
         <h3>🧪 Test Pesan</h3>
         <div class="test-section">
@@ -289,25 +297,31 @@
             <strong>💡 Cara mendapatkan Chat ID:</strong>
             <ul style="margin: 10px 0; padding-left: 20px">
               <li>
-                <strong>Personal Chat:</strong> Kirim pesan ke bot, lalu cek di
-                Message Logs
+                <strong>Personal Chat:</strong> Kirim pesan /start ke bot, lalu
+                cek di Message Logs di atas untuk melihat Chat ID-nya
               </li>
               <li>
                 <strong>Group:</strong> Chat ID biasanya negatif (contoh:
-                <code>-1001234567890</code>)
+                <code>-1001234567890</code>). Bot harus ditambahkan ke group
+                dulu.
               </li>
               <li>
-                <strong>Channel:</strong> Chat ID negatif dengan format
+                <strong>Channel:</strong> Gunakan username (contoh:
+                <code>@channelname</code>) atau Chat ID negatif dengan format
                 <code>-100</code> di awal
               </li>
               <li>Klik group di daftar di atas untuk auto-fill Chat ID</li>
+              <li style="color: #dc3545; font-weight: 600">
+                ⚠️ <strong>PENTING:</strong> Chat ID bukan nomor HP! Nomor HP
+                tidak bisa digunakan sebagai Chat ID.
+              </li>
             </ul>
           </div>
           <div class="test-form">
             <input
               type="text"
               id="testChatId"
-              placeholder="Chat ID (contoh: -1001234567890 atau 123456789)"
+              placeholder="Chat ID (contoh: -1001234567890, 123456789) atau Username (@channelname)"
             />
             <input
               type="text"

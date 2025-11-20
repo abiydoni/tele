@@ -313,9 +313,13 @@ app.get("/api/tokens/:id/chats", async (req, res) => {
     const TelegramBot = require("node-telegram-bot-api");
     const bot = new TelegramBot(token.token, { polling: false });
 
-    // Get all unique chat IDs from message logs (always check logs)
-    const logs = messageLogs.getAll(10000, tokenId); // Get more logs
+    // Get all unique chat IDs from message logs
+    const logs = messageLogs.getAll(10000, tokenId);
     const chatMap = new Map();
+
+    console.log(
+      `[Chats API] Found ${logs.length} message logs for token ${tokenId}`
+    );
 
     logs.forEach((log) => {
       if (log.chat_id && !chatMap.has(log.chat_id)) {
@@ -326,16 +330,28 @@ app.get("/api/tokens/:id/chats", async (req, res) => {
       }
     });
 
-    // Also get from database
+    // Get from database (this is the primary source)
     const dbChats = chats.getAll(tokenId);
+    console.log(
+      `[Chats API] Found ${dbChats.length} chats in database for token ${tokenId}`
+    );
+
     dbChats.forEach((dbChat) => {
-      if (!chatMap.has(dbChat.chat_id)) {
+      if (dbChat.chat_id) {
         chatMap.set(dbChat.chat_id, {
           chat_id: dbChat.chat_id,
           username: dbChat.username || null,
         });
       }
     });
+
+    console.log(`[Chats API] Total unique chat IDs: ${chatMap.size}`);
+
+    // If no chats found, return empty array
+    if (chatMap.size === 0) {
+      console.log(`[Chats API] No chats found. Returning empty array.`);
+      return res.json([]);
+    }
 
     // Try to get chat info from Telegram API for all chats
     const chatsWithInfo = [];
@@ -365,6 +381,9 @@ app.get("/api/tokens/:id/chats", async (req, res) => {
           type: chatInfo.type || "private",
         });
       } catch (error) {
+        console.log(
+          `[Chats API] Cannot get chat info for ${chatId}: ${error.message}`
+        );
         // If can't get from API, try to use stored data
         const storedChat = chats.getByChatId(chatId.toString(), tokenId);
         if (storedChat) {
@@ -378,7 +397,7 @@ app.get("/api/tokens/:id/chats", async (req, res) => {
             type: storedChat.type || "private",
           });
         } else {
-          // If no stored data, create basic entry
+          // If no stored data, create basic entry from chat ID
           const chatType = chatId.toString().startsWith("-100")
             ? "channel"
             : chatId.toString().startsWith("-")
@@ -398,16 +417,69 @@ app.get("/api/tokens/:id/chats", async (req, res) => {
 
     // Sort by last message (most recent first)
     chatsWithInfo.sort((a, b) => {
-      const aTime =
-        chats.getByChatId(a.chat_id, tokenId)?.last_message_at || "";
-      const bTime =
-        chats.getByChatId(b.chat_id, tokenId)?.last_message_at || "";
+      const aChat = chats.getByChatId(a.chat_id, tokenId);
+      const bChat = chats.getByChatId(b.chat_id, tokenId);
+      const aTime = aChat?.last_message_at || aChat?.created_at || "";
+      const bTime = bChat?.last_message_at || bChat?.created_at || "";
       return bTime.localeCompare(aTime);
     });
 
+    console.log(`[Chats API] Returning ${chatsWithInfo.length} chats`);
     res.json(chatsWithInfo);
   } catch (error) {
     console.error("Error getting chats:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API Routes - Get Chat Info by Username or Chat ID
+app.get("/api/tokens/:id/chat-info", async (req, res) => {
+  try {
+    const tokenId = parseInt(req.params.id);
+    const token = botTokens.getById(tokenId);
+    if (!token) {
+      return res.status(404).json({ error: "Token tidak ditemukan" });
+    }
+
+    const { chat_id, username } = req.query;
+
+    if (!chat_id && !username) {
+      return res
+        .status(400)
+        .json({ error: "chat_id atau username wajib diisi" });
+    }
+
+    const TelegramBot = require("node-telegram-bot-api");
+    const bot = new TelegramBot(token.token, { polling: false });
+
+    try {
+      const identifier = username ? username : chat_id;
+      const chatInfo = await bot.getChat(identifier);
+
+      // Save to database
+      chats.createOrUpdate({
+        bot_token_id: tokenId,
+        chat_id: chatInfo.id.toString(),
+        title: chatInfo.title || null,
+        username: chatInfo.username || null,
+        first_name: chatInfo.first_name || null,
+        type: chatInfo.type || "private",
+        last_message_at: new Date().toISOString(),
+      });
+
+      res.json({
+        chat_id: chatInfo.id.toString(),
+        title: chatInfo.title || chatInfo.first_name || "Unknown",
+        username: chatInfo.username || null,
+        first_name: chatInfo.first_name || null,
+        type: chatInfo.type || "private",
+      });
+    } catch (error) {
+      res.status(400).json({
+        error: error.message || "Gagal mendapatkan informasi chat",
+      });
+    }
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
@@ -421,23 +493,48 @@ app.post("/api/tokens/:id/send", async (req, res) => {
       return res.status(404).json({ error: "Token tidak ditemukan" });
     }
 
-    const { chat_id, message } = req.body;
+    let { chat_id, message } = req.body;
     if (!chat_id || !message) {
       return res.status(400).json({ error: "chat_id dan message wajib diisi" });
+    }
+
+    // Validate chat_id format
+    chat_id = chat_id.toString().trim();
+
+    // Check if it looks like a phone number
+    const phonePattern = /^(\+62|62|0)[0-9]{9,12}$/;
+    if (phonePattern.test(chat_id.replace(/[^\d+]/g, ""))) {
+      return res.status(400).json({
+        error:
+          "Nomor HP tidak bisa digunakan sebagai Chat ID. Chat ID adalah ID numerik unik dari Telegram, bukan nomor telepon.\n\nCara mendapatkan Chat ID:\n1. Untuk personal chat: Kirim pesan /start ke bot, lalu cek di Message Logs\n2. Untuk group/channel: Chat ID akan muncul setelah bot ditambahkan ke group\n3. Klik group di daftar chat untuk melihat Chat ID-nya",
+      });
     }
 
     const TelegramBot = require("node-telegram-bot-api");
     const bot = new TelegramBot(token.token, { polling: false });
 
     try {
-      const sentMessage = await bot.sendMessage(chat_id, message);
+      // If chat_id starts with @, try to get chat info first
+      let actualChatId = chat_id;
+      if (chat_id.startsWith("@")) {
+        try {
+          const chatInfo = await bot.getChat(chat_id);
+          actualChatId = chatInfo.id.toString();
+        } catch (usernameError) {
+          return res.status(400).json({
+            error: `Username ${chat_id} tidak ditemukan atau bot tidak memiliki akses. Pastikan:\n1. Username benar (format: @username)\n2. Bot sudah ditambahkan ke channel/group tersebut\n3. Untuk personal chat, gunakan Chat ID numerik`,
+          });
+        }
+      }
+
+      const sentMessage = await bot.sendMessage(actualChatId, message);
 
       // Save chat info
       try {
-        const chatInfo = await bot.getChat(chat_id);
+        const chatInfo = await bot.getChat(actualChatId);
         chats.createOrUpdate({
           bot_token_id: tokenId,
-          chat_id: chat_id.toString(),
+          chat_id: actualChatId.toString(),
           title: chatInfo.title || null,
           username: chatInfo.username || null,
           first_name: chatInfo.first_name || null,
@@ -452,7 +549,7 @@ app.post("/api/tokens/:id/send", async (req, res) => {
       const { messageLogs } = require("./database");
       messageLogs.create({
         bot_token_id: tokenId,
-        chat_id: chat_id.toString(),
+        chat_id: actualChatId.toString(),
         message_type: "text",
         message_content: message,
         direction: "outgoing",
@@ -462,10 +559,28 @@ app.post("/api/tokens/:id/send", async (req, res) => {
         success: true,
         message_id: sentMessage.message_id,
         chat_id: sentMessage.chat.id,
+        chat_username: sentMessage.chat.username || null,
       });
     } catch (error) {
+      let errorMessage = error.message || "Gagal mengirim pesan";
+
+      // Provide more helpful error messages
+      if (
+        errorMessage.includes("chat not found") ||
+        errorMessage.includes("Chat not found")
+      ) {
+        errorMessage =
+          "Chat tidak ditemukan. Pastikan:\n1. Bot sudah ditambahkan ke group/channel (jika group/channel)\n2. Chat ID benar (bukan nomor telepon)\n3. Untuk personal chat, user sudah mengirim /start ke bot\n4. Bot memiliki izin untuk mengirim pesan";
+      } else if (errorMessage.includes("bot was blocked")) {
+        errorMessage =
+          "Bot diblokir oleh user. User harus membuka blokir bot terlebih dahulu.";
+      } else if (errorMessage.includes("not enough rights")) {
+        errorMessage =
+          "Bot tidak memiliki izin yang cukup. Pastikan bot adalah admin di group/channel.";
+      }
+
       res.status(400).json({
-        error: error.message || "Gagal mengirim pesan",
+        error: errorMessage,
       });
     }
   } catch (error) {

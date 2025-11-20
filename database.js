@@ -22,7 +22,21 @@ function loadDB() {
 
 // Save database to file
 function saveDB(data) {
-  fs.writeFileSync(dbPath, JSON.stringify(data, null, 2), "utf8");
+  try {
+    // Ensure directory exists
+    const dbDir = path.dirname(dbPath);
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true });
+    }
+
+    // Write to temporary file first, then rename (atomic operation)
+    const tempPath = dbPath + ".tmp";
+    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf8");
+    fs.renameSync(tempPath, dbPath);
+  } catch (error) {
+    console.error("Error saving database:", error);
+    throw error;
+  }
 }
 
 // Get default database structure
@@ -127,14 +141,17 @@ const botTokens = {
 // Settings methods
 const settings = {
   getAll: () => {
+    reloadDB();
     return db.settings.sort((a, b) => a.key.localeCompare(b.key));
   },
 
   getByKey: (key) => {
+    reloadDB();
     return db.settings.find((s) => s.key === key);
   },
 
   create: (key, value, description = null) => {
+    reloadDB();
     const newSetting = {
       id: db.settings.length + 1,
       key,
@@ -149,6 +166,7 @@ const settings = {
   },
 
   update: (key, data) => {
+    reloadDB();
     const setting = db.settings.find((s) => s.key === key);
     if (!setting) return null;
 
@@ -161,6 +179,7 @@ const settings = {
   },
 
   delete: (key) => {
+    reloadDB();
     const index = db.settings.findIndex((s) => s.key === key);
     if (index !== -1) {
       db.settings.splice(index, 1);
@@ -194,6 +213,7 @@ const messageLogs = {
   },
 
   create: (data) => {
+    reloadDB();
     const newId =
       db.message_logs.length > 0
         ? Math.max(...db.message_logs.map((l) => l.id)) + 1
@@ -215,6 +235,7 @@ const messageLogs = {
   },
 
   getStats: () => {
+    reloadDB();
     return {
       total_logs: db.message_logs.length,
     };
@@ -226,17 +247,36 @@ const chats = {
   getAll: (botTokenId = null) => {
     reloadDB();
     let allChats = db.chats || [];
-    if (botTokenId) {
-      allChats = allChats.filter((c) => c.bot_token_id === botTokenId);
+    if (botTokenId !== null && botTokenId !== undefined) {
+      // Convert both to number for comparison
+      const tokenIdNum =
+        typeof botTokenId === "string" ? parseInt(botTokenId) : botTokenId;
+      allChats = allChats.filter((c) => {
+        const chatTokenId =
+          typeof c.bot_token_id === "string"
+            ? parseInt(c.bot_token_id)
+            : c.bot_token_id;
+        return chatTokenId === tokenIdNum;
+      });
     }
     return allChats;
   },
 
   getByChatId: (chatId, botTokenId = null) => {
     reloadDB();
-    const allChats = botTokenId
-      ? db.chats.filter((c) => c.bot_token_id === botTokenId)
-      : db.chats;
+    let allChats = db.chats || [];
+    if (botTokenId !== null && botTokenId !== undefined) {
+      // Convert both to number for comparison
+      const tokenIdNum =
+        typeof botTokenId === "string" ? parseInt(botTokenId) : botTokenId;
+      allChats = allChats.filter((c) => {
+        const chatTokenId =
+          typeof c.bot_token_id === "string"
+            ? parseInt(c.bot_token_id)
+            : c.bot_token_id;
+        return chatTokenId === tokenIdNum;
+      });
+    }
     return allChats.find((c) => c.chat_id === chatId.toString());
   },
 
@@ -246,11 +286,21 @@ const chats = {
       db.chats = [];
     }
 
-    const existing = db.chats.find(
-      (c) =>
-        c.chat_id === data.chat_id.toString() &&
-        c.bot_token_id === data.bot_token_id
-    );
+    // Convert both to string/number for comparison
+    const chatIdStr = data.chat_id.toString();
+    const tokenIdNum =
+      typeof data.bot_token_id === "string"
+        ? parseInt(data.bot_token_id)
+        : data.bot_token_id;
+
+    const existing = db.chats.find((c) => {
+      const cChatId = c.chat_id ? c.chat_id.toString() : "";
+      const cTokenId =
+        typeof c.bot_token_id === "string"
+          ? parseInt(c.bot_token_id)
+          : c.bot_token_id;
+      return cChatId === chatIdStr && cTokenId === tokenIdNum;
+    });
 
     if (existing) {
       // Update existing
@@ -286,6 +336,7 @@ const chats = {
 
 // Stats
 function getStats() {
+  reloadDB();
   return {
     total_tokens: db.bot_tokens.length,
     active_tokens: db.bot_tokens.filter((t) => t.is_active).length,
